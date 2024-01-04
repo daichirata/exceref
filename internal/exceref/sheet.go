@@ -108,43 +108,35 @@ func NewDataSeet(name string, rows [][]string) (*Sheet, error) {
 	sheet := &Sheet{
 		Name: name,
 	}
-	if len(rows) == 0 {
-		return sheet, nil
-	}
-
-	for i, value := range rows[DataSheetIndexColumnType] {
-		sheet.Columns = append(sheet.Columns, &Column{
-			Type:  value,
-			Index: i,
-		})
-	}
-	if len(rows) >= DataSheetIndexColumnName {
-		for i, value := range rows[DataSheetIndexColumnName] {
-			sheet.Columns[i].Name = value
-		}
-	}
-	if len(rows) >= DataSheetIndexColumnDescription {
-		for i, value := range rows[DataSheetIndexColumnDescription] {
-			sheet.Columns[i].Description = value
-		}
-	}
-	if len(rows) >= DataSheetIndexBody {
-		for _, r := range rows[DataSheetIndexBody:] {
+	for i, r := range rows {
+		switch i {
+		case DataSheetIndexColumnType:
+			for j, value := range r {
+				sheet.Columns = append(sheet.Columns, &Column{
+					Type:  value,
+					Index: j,
+				})
+			}
+		case DataSheetIndexColumnName:
+			for j, value := range r {
+				sheet.Columns[j].Name = value
+			}
+		case DataSheetIndexColumnDescription:
+			for j, value := range r {
+				sheet.Columns[j].Description = value
+			}
+		default:
 			var row Row
 			for _, column := range sheet.Columns {
-				if len(r) < column.Index+1 {
-					row = append(row, &Cell{Column: column, Value: "", Raw: ""})
-				} else {
-					v, err := parseValue(column.Type, r[column.Index])
-					if err != nil {
-						return nil, err
-					}
-					row = append(row, &Cell{
-						Column: column,
-						Value:  v,
-						Raw:    r[column.Index],
-					})
+				var rawValue string
+				if len(r) > column.Index {
+					rawValue = r[column.Index]
 				}
+				value, err := parseValue(column.Type, rawValue)
+				if err != nil {
+					return nil, err
+				}
+				row = append(row, &Cell{Column: column, Value: value, Raw: rawValue})
 			}
 			sheet.Rows = append(sheet.Rows, row)
 		}
@@ -156,35 +148,30 @@ func NewReferenceDefinitionSheet(name string, rows [][]string) *Sheet {
 	sheet := &Sheet{
 		Name: name,
 	}
-	if len(rows) == 0 {
-		return sheet
-	}
-
-	for i, value := range rows[ReferenceDefinitionSheetIndexColumnName] {
-		if value == "" {
-			continue
+	for i, r := range rows {
+		switch i {
+		case ReferenceDefinitionSheetIndexColumnName:
+			for i, value := range r {
+				if value == "" {
+					continue
+				}
+				sheet.Columns = append(sheet.Columns, &Column{
+					Type:  "string",
+					Name:  value,
+					Index: i,
+				})
+			}
+		default:
+			var row Row
+			for _, column := range sheet.Columns {
+				row = append(row, &Cell{
+					Column: column,
+					Value:  r[column.Index],
+					Raw:    r[column.Index],
+				})
+			}
+			sheet.Rows = append(sheet.Rows, row)
 		}
-		sheet.Columns = append(sheet.Columns, &Column{
-			Type:  "string",
-			Name:  value,
-			Index: i,
-		})
-	}
-
-	if len(rows) < ReferenceDefinitionSheetIndexBody {
-		return sheet
-	}
-
-	for _, r := range rows[ReferenceDefinitionSheetIndexBody:] {
-		var row Row
-		for _, column := range sheet.Columns {
-			row = append(row, &Cell{
-				Column: column,
-				Value:  r[column.Index],
-				Raw:    r[column.Index],
-			})
-		}
-		sheet.Rows = append(sheet.Rows, row)
 	}
 	return sheet
 }

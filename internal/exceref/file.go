@@ -1,7 +1,6 @@
 package exceref
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -143,7 +142,6 @@ func (f *File) UpdateDataValidations() error {
 		}
 		dvRange := excelize.NewDataValidation(true)
 		dvRange.Sqref = dst
-		fmt.Println(dst, src)
 		dvRange.SetSqrefDropList(ReferenceDataSheetName + "!" + src)
 		f.xlsx.AddDataValidation(referenceDefinition.Sheet, dvRange)
 	}
