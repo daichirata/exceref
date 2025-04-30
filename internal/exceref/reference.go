@@ -15,6 +15,7 @@ type ReferenceDefinition struct {
 	ReferenceSheet string
 	ReferenceKey   string
 	ReferenceValue string
+	ReferenceName  string
 }
 
 func (r *ReferenceDefinition) ReferenceFileName() string {
@@ -57,6 +58,8 @@ func NewReferenceResolver(file *File, sheet *Sheet) (*ReferenceResolver, error) 
 				definition.ReferenceKey = cell.Raw
 			case "reference_value":
 				definition.ReferenceValue = cell.Raw
+			case "reference_name":
+				definition.ReferenceName = cell.Raw
 			default:
 				return nil, fmt.Errorf("unknown column: %s", cell.Column.Name)
 			}

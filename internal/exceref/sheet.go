@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -166,8 +167,8 @@ func NewReferenceDefinitionSheet(name string, rows [][]string) *Sheet {
 			for _, column := range sheet.Columns {
 				row = append(row, &Cell{
 					Column: column,
-					Value:  r[column.Index],
-					Raw:    r[column.Index],
+					Value:  lo.NthOr(r, column.Index, ""),
+					Raw:    lo.NthOr(r, column.Index, ""),
 				})
 			}
 			sheet.Rows = append(sheet.Rows, row)

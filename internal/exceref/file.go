@@ -1,6 +1,8 @@
 package exceref
 
 import (
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -75,8 +77,20 @@ func (f *File) DeleteReferenceData() {
 	f.xlsx.NewSheet(ReferenceDataSheetName)
 }
 
+func (f *File) DeleteDefinedNames() {
+	for _, n := range f.xlsx.GetDefinedName() {
+		if strings.HasPrefix("_", n.Name) {
+			continue
+		}
+		if err := f.xlsx.DeleteDefinedName(&n); err != nil {
+			slog.Debug("xlsx.DeleteDefinedName", "error", err, "name", n.Name)
+		}
+	}
+}
+
 func (f *File) UpdateReferenceData() error {
 	f.DeleteReferenceData()
+	f.DeleteDefinedNames()
 
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
@@ -96,6 +110,24 @@ func (f *File) UpdateReferenceData() error {
 			return err
 		}
 		f.xlsx.SetSheetCol(ReferenceDataSheetName, cell, &keys)
+
+		if reference.Definition.ReferenceName != "" {
+			from, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, 1, true)
+			if err != nil {
+				return err
+			}
+			to, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, len(keys), true)
+			if err != nil {
+				return err
+			}
+			err = f.xlsx.SetDefinedName(&excelize.DefinedName{
+				Name:     reference.Definition.ReferenceName,
+				RefersTo: fmt.Sprintf("%s!%s:%s", ReferenceDataSheetName, from, to),
+			})
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -132,6 +164,9 @@ func (f *File) UpdateDataValidations() error {
 		return err
 	}
 	for _, referenceDefinition := range resolver.ReferenceDefinitions {
+		if referenceDefinition.Sheet == "" {
+			continue
+		}
 		sheet, err := f.DataSheet(referenceDefinition.Sheet)
 		if err != nil {
 			return err
@@ -142,7 +177,11 @@ func (f *File) UpdateDataValidations() error {
 		}
 		dvRange := excelize.NewDataValidation(true)
 		dvRange.Sqref = dst
-		dvRange.SetSqrefDropList(ReferenceDataSheetName + "!" + src)
+		if referenceDefinition.ReferenceValue == "" {
+
+		} else {
+			dvRange.SetSqrefDropList(ReferenceDataSheetName + "!" + src)
+		}
 		f.xlsx.AddDataValidation(referenceDefinition.Sheet, dvRange)
 	}
 	return nil
