@@ -29,11 +29,17 @@ func (r *ReferenceDefinition) ReferenceFilePath() string {
 	return filepath.Join(r.BaseDir, r.ReferenceFileName())
 }
 
+func (r *ReferenceDefinition) PolymorphicReference() bool {
+	return r.ReferenceValue == ""
+}
+
 type Reference struct {
-	Definition *ReferenceDefinition
-	Column     *Column
-	Keys       []*Cell
-	Values     []*Cell
+	Definition  *ReferenceDefinition
+	KeyColumn   *Column
+	ValueColumn *Column
+	Keys        []*Cell
+	Values      []*Cell
+	ValueMap    map[string]*Cell
 }
 
 func NewReferenceResolver(file *File, sheet *Sheet) (*ReferenceResolver, error) {
@@ -64,6 +70,11 @@ func NewReferenceResolver(file *File, sheet *Sheet) (*ReferenceResolver, error) 
 				return nil, fmt.Errorf("unknown column: %s", cell.Column.Name)
 			}
 		}
+		if definition.PolymorphicReference() {
+			if definition.Sheet != definition.ReferenceSheet {
+				return nil, fmt.Errorf("PolymorphicReference Sheet(%s) and ReferenceSheet(%s) must match", definition.Sheet, definition.ReferenceSheet)
+			}
+		}
 		resolver.ReferenceDefinitions = append(resolver.ReferenceDefinitions, definition)
 	}
 	return resolver, nil
@@ -72,10 +83,15 @@ func NewReferenceResolver(file *File, sheet *Sheet) (*ReferenceResolver, error) 
 type ReferenceResolver struct {
 	SheetReader          SheetReader
 	ReferenceDefinitions []*ReferenceDefinition
+
+	references []*Reference
 }
 
 func (r *ReferenceResolver) References() ([]*Reference, error) {
-	references := make([]*Reference, len(r.ReferenceDefinitions))
+	if r.references != nil {
+		return r.references, nil
+	}
+	r.references = make([]*Reference, len(r.ReferenceDefinitions))
 
 	for i, referenceDefinition := range r.ReferenceDefinitions {
 		referenceSheet, err := r.SheetReader.Open(referenceDefinition.ReferenceFilePath(), referenceDefinition.ReferenceSheet)
@@ -83,27 +99,42 @@ func (r *ReferenceResolver) References() ([]*Reference, error) {
 			return nil, err
 		}
 
-		k, err := referenceSheet.Column(referenceDefinition.ReferenceKey)
-		if err != nil {
-			return nil, err
+		if referenceDefinition.PolymorphicReference() {
+			k, err := referenceSheet.Column(referenceDefinition.ReferenceKey)
+			if err != nil {
+				return nil, err
+			}
+			reference := &Reference{
+				Definition: referenceDefinition,
+				KeyColumn:  referenceSheet.Columns[k.Index],
+			}
+			r.references[i] = reference
+		} else {
+			k, err := referenceSheet.Column(referenceDefinition.ReferenceKey)
+			if err != nil {
+				return nil, err
+			}
+			v, err := referenceSheet.Column(referenceDefinition.ReferenceValue)
+			if err != nil {
+				return nil, err
+			}
+			reference := &Reference{
+				Definition:  referenceDefinition,
+				KeyColumn:   referenceSheet.Columns[k.Index],
+				ValueColumn: referenceSheet.Columns[v.Index],
+				Keys:        make([]*Cell, len(referenceSheet.Rows)),
+				Values:      make([]*Cell, len(referenceSheet.Rows)),
+				ValueMap:    make(map[string]*Cell),
+			}
+			for j, row := range referenceSheet.Rows {
+				reference.Keys[j] = row[k.Index]
+				reference.Values[j] = row[v.Index]
+				reference.ValueMap[reference.Keys[j].Raw] = reference.Values[j]
+			}
+			r.references[i] = reference
 		}
-		v, err := referenceSheet.Column(referenceDefinition.ReferenceValue)
-		if err != nil {
-			return nil, err
-		}
-		reference := &Reference{
-			Definition: referenceDefinition,
-			Column:     referenceSheet.Columns[v.Index],
-			Keys:       make([]*Cell, len(referenceSheet.Rows)),
-			Values:     make([]*Cell, len(referenceSheet.Rows)),
-		}
-		for j, row := range referenceSheet.Rows {
-			reference.Keys[j] = row[k.Index]
-			reference.Values[j] = row[v.Index]
-		}
-		references[i] = reference
 	}
-	return references, nil
+	return r.references, nil
 }
 
 func (r *ReferenceResolver) Resolve(sheet *Sheet) error {
@@ -111,25 +142,68 @@ func (r *ReferenceResolver) Resolve(sheet *Sheet) error {
 	if err != nil {
 		return err
 	}
+
+	// Resolve the poymorphic reference first, since poymorphic reference resolution cannot be performed
+	// if the value of reference_key has already been rewritten.
+	names := make(map[string]*Reference)
+	for _, r := range references {
+		if name := r.Definition.ReferenceName; name != "" {
+			names[name] = r
+		}
+	}
 	for _, reference := range references {
 		if reference.Definition.Sheet != sheet.Name {
 			continue
 		}
-		for i, column := range sheet.Columns {
+		for _, column := range sheet.Columns {
 			if reference.Definition.Column != column.Name {
 				continue
 			}
-			sheet.Columns[i].Type = reference.Column.Type
+			if reference.Definition.PolymorphicReference() {
+				for _, row := range sheet.Rows {
+					r, ok := names[row[reference.KeyColumn.Index].Raw]
+					if !ok {
+						return fmt.Errorf("reference_name:%s not found", row[reference.KeyColumn.Index].Raw)
 
-			m := make(map[string]*Cell)
-			for i, k := range reference.Keys {
-				m[k.Raw] = reference.Values[i]
-			}
-			for _, row := range sheet.Rows {
-				if v, ok := m[row[column.Index].Raw]; ok {
-					row[column.Index] = v
+					}
+					if v, ok := r.ValueMap[row[column.Index].Raw]; ok {
+						row[column.Index] = v
+					} else {
+						return fmt.Errorf("reference:%s value not found from %s:%s", row[column.Index].Raw,
+							reference.Definition.ReferenceSheet, reference.Definition.ReferenceKey)
+					}
+					if column.Type == "" || column.Type == "ref" {
+						column.Type = r.ValueColumn.Type
+					} else if column.Type != r.ValueColumn.Type {
+						return fmt.Errorf("value type mismatch: %s, %s", column.Type, r.ValueColumn.Type)
+					}
 				}
 			}
+		}
+	}
+
+	// Resolve a regular reference after resolving a poymorphic reference
+	for _, reference := range references {
+		if reference.Definition.Sheet != sheet.Name {
+			continue
+		}
+		for _, column := range sheet.Columns {
+			if reference.Definition.Column != column.Name {
+				continue
+			}
+			if !reference.Definition.PolymorphicReference() {
+				column.Type = reference.ValueColumn.Type
+
+				for _, row := range sheet.Rows {
+					if v, ok := reference.ValueMap[row[column.Index].Raw]; ok {
+						row[column.Index] = v
+					} else {
+						return fmt.Errorf("reference:%s value not found from %s:%s", row[column.Index].Raw,
+							reference.Definition.ReferenceSheet, reference.Definition.ReferenceKey)
+					}
+				}
+			}
+
 		}
 	}
 	return nil
