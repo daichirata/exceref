@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -81,27 +82,27 @@ func (s *Sheet) Sqrefs(referenceDefinition *ReferenceDefinition) (string, string
 	if err != nil {
 		return "", "", err
 	}
-	dstBegin, err := excelize.CoordinatesToCellName(column.Index+1, DataSheetIndexBody+1)
+	first, err := excelize.CoordinatesToCellName(column.Index+1, DataSheetIndexBody+1)
 	if err != nil {
 		return "", "", err
 	}
-	dstEnd, err := excelize.CoordinatesToCellName(column.Index+1, 9999)
+	last, err := excelize.CoordinatesToCellName(column.Index+1, 9999)
 	if err != nil {
 		return "", "", err
 	}
-	dstSqref := fmt.Sprintf("%s:%s", dstBegin, dstEnd)
+	sqref := fmt.Sprintf("%s:%s", first, last)
 
-	srcBegin, err := excelize.CoordinatesToCellName(referenceDefinition.Index+1, 1, true)
+	srcFirst, err := excelize.CoordinatesToCellName(referenceDefinition.Index+1, 1, true)
 	if err != nil {
 		return "", "", err
 	}
-	srcEnd, err := excelize.CoordinatesToCellName(referenceDefinition.Index+1, 9999, true)
+	srcLast, err := excelize.CoordinatesToCellName(referenceDefinition.Index+1, 9999, true)
 	if err != nil {
 		return "", "", err
 	}
-	srcSqref := fmt.Sprintf("%s:%s", srcBegin, srcEnd)
+	srcSqref := fmt.Sprintf("%s:%s", srcFirst, srcLast)
 
-	return dstSqref, srcSqref, nil
+	return sqref, srcSqref, nil
 }
 
 func NewDataSeet(name string, rows [][]string) (*Sheet, error) {
@@ -166,8 +167,8 @@ func NewReferenceDefinitionSheet(name string, rows [][]string) *Sheet {
 			for _, column := range sheet.Columns {
 				row = append(row, &Cell{
 					Column: column,
-					Value:  r[column.Index],
-					Raw:    r[column.Index],
+					Value:  lo.NthOr(r, column.Index, ""),
+					Raw:    lo.NthOr(r, column.Index, ""),
 				})
 			}
 			sheet.Rows = append(sheet.Rows, row)

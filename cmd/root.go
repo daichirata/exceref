@@ -1,40 +1,34 @@
 package cmd
 
 import (
-	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-var cfgFile string
+var debug bool
 
 var rootCmd = &cobra.Command{
-	Use: "refcell",
+	Use: "exceref",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if debug {
+			slog.SetDefault(slog.New(
+				slog.NewTextHandler(
+					os.Stdout,
+					&slog.HandlerOptions{Level: slog.LevelDebug},
+				)),
+			)
+		}
+	},
 }
 
 func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	cobra.OnInitialize(initConfig)
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "debug")
 }
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
-	}
-}
-
-func initConfig() {
-	if cfgFile != "" {
-		viper.SetConfigFile(cfgFile)
-	}
-
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
 }

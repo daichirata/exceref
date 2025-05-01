@@ -1,6 +1,8 @@
 package exceref
 
 import (
+	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -75,8 +77,20 @@ func (f *File) DeleteReferenceData() {
 	f.xlsx.NewSheet(ReferenceDataSheetName)
 }
 
+func (f *File) DeleteDefinedNames() {
+	for _, n := range f.xlsx.GetDefinedName() {
+		if strings.HasPrefix("_", n.Name) {
+			continue
+		}
+		if err := f.xlsx.DeleteDefinedName(&n); err != nil {
+			slog.Debug("xlsx.DeleteDefinedName", "error", err, "name", n.Name)
+		}
+	}
+}
+
 func (f *File) UpdateReferenceData() error {
 	f.DeleteReferenceData()
+	f.DeleteDefinedNames()
 
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
@@ -87,6 +101,10 @@ func (f *File) UpdateReferenceData() error {
 		return err
 	}
 	for _, reference := range references {
+		if reference.Definition.PolymorphicReference() {
+			continue
+		}
+
 		keys := make([]string, len(reference.Keys))
 		for i, cell := range reference.Keys {
 			keys[i] = cell.Raw
@@ -96,6 +114,24 @@ func (f *File) UpdateReferenceData() error {
 			return err
 		}
 		f.xlsx.SetSheetCol(ReferenceDataSheetName, cell, &keys)
+
+		if reference.Definition.ReferenceName != "" {
+			first, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, 1, true)
+			if err != nil {
+				return err
+			}
+			last, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, len(keys), true)
+			if err != nil {
+				return err
+			}
+			err = f.xlsx.SetDefinedName(&excelize.DefinedName{
+				Name:     reference.Definition.ReferenceName,
+				RefersTo: fmt.Sprintf("%s!%s:%s", ReferenceDataSheetName, first, last),
+			})
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -108,42 +144,65 @@ func (f *File) DeleteDataValidations() error {
 		return err
 	}
 	for _, referenceDefinition := range resolver.ReferenceDefinitions {
+		if referenceDefinition.Sheet == "" {
+			continue
+		}
 		sheet, err := f.DataSheet(referenceDefinition.Sheet)
 		if err != nil {
 			return err
 		}
-		dst, _, err := sheet.Sqrefs(referenceDefinition)
+		sqref, _, err := sheet.Sqrefs(referenceDefinition)
 		if err != nil {
 			return err
 		}
-		m[referenceDefinition.Sheet] = append(m[referenceDefinition.Sheet], dst)
+		m[referenceDefinition.Sheet] = append(m[referenceDefinition.Sheet], sqref)
 	}
 	for name := range m {
-		f.xlsx.DeleteDataValidation(name) // FIXME
+		f.xlsx.DeleteDataValidation(name) // FIXME: pass sqref
+		slog.Debug("DeleteDataValidations", "sheet", name)
 	}
 	return nil
 }
 
 func (f *File) UpdateDataValidations() error {
-	f.DeleteDataValidations()
+	if err := f.DeleteDataValidations(); err != nil {
+		return err
+	}
 
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
 		return err
 	}
-	for _, referenceDefinition := range resolver.ReferenceDefinitions {
-		sheet, err := f.DataSheet(referenceDefinition.Sheet)
+	references, err := resolver.References()
+	if err != nil {
+		return err
+	}
+	for _, reference := range references {
+		if reference.Definition.Sheet == "" {
+			continue
+		}
+		sheet, err := f.DataSheet(reference.Definition.Sheet)
 		if err != nil {
 			return err
 		}
-		dst, src, err := sheet.Sqrefs(referenceDefinition)
+		sqref, srcSqref, err := sheet.Sqrefs(reference.Definition)
 		if err != nil {
 			return err
 		}
 		dvRange := excelize.NewDataValidation(true)
-		dvRange.Sqref = dst
-		dvRange.SetSqrefDropList(ReferenceDataSheetName + "!" + src)
-		f.xlsx.AddDataValidation(referenceDefinition.Sheet, dvRange)
+		dvRange.Sqref = sqref
+		if reference.Definition.PolymorphicReference() {
+			name, err := excelize.ColumnNumberToName(reference.KeyColumn.Index + 1)
+			if err != nil {
+				return err
+			}
+			dvRange.SetSqrefDropList(fmt.Sprintf("INDIRECT($%s4)", name))
+		} else {
+			dvRange.SetSqrefDropList(ReferenceDataSheetName + "!" + srcSqref)
+		}
+		f.xlsx.AddDataValidation(reference.Definition.Sheet, dvRange)
+
+		slog.Debug("AddDataValidation", "sheet", reference.Definition.Sheet, "dv", dvRange)
 	}
 	return nil
 }
