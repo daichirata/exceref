@@ -15,27 +15,31 @@ type Exporter interface {
 	Export(sheet *Sheet) error
 }
 
-func BuildExporter(format, outDir string) Exporter {
+func BuildExporter(format, outDir, prefix string) Exporter {
 	switch format {
 	case "json":
-		return NewJSONExporter(outDir)
+		return NewJSONExporter(outDir, prefix)
 	case "yaml":
-		return NewYAMLExporter(outDir)
+		return NewYAMLExporter(outDir, prefix)
 	default:
-		return NewCSVExporter(outDir)
+		return NewCSVExporter(outDir, prefix)
 	}
 }
 
-func NewCSVExporter(outDir string) *csvExporter {
-	return &csvExporter{outDir: outDir}
+func NewCSVExporter(outDir, prefix string) *csvExporter {
+	return &csvExporter{
+		prefix: prefix,
+		outDir: outDir,
+	}
 }
 
 type csvExporter struct {
 	outDir string
+	prefix string
 }
 
 func (e *csvExporter) Export(sheet *Sheet) error {
-	f, err := os.Create(filepath.Join(e.outDir, sheet.Name+".csv"))
+	f, err := os.Create(filepath.Join(e.outDir, e.prefix+sheet.Name+".csv"))
 	if err != nil {
 		return err
 	}
@@ -86,16 +90,20 @@ func (e *csvExporter) toCSVString(value any) (string, error) {
 	return "", fmt.Errorf("unmatched type:%#v", value)
 }
 
-func NewJSONExporter(outDir string) *jsonExporter {
-	return &jsonExporter{outDir: outDir}
+func NewJSONExporter(outDir, prefix string) *jsonExporter {
+	return &jsonExporter{
+		outDir: outDir,
+		prefix: prefix,
+	}
 }
 
 type jsonExporter struct {
 	outDir string
+	prefix string
 }
 
 func (e *jsonExporter) Export(sheet *Sheet) error {
-	f, err := os.Create(filepath.Join(e.outDir, sheet.Name+".json"))
+	f, err := os.Create(filepath.Join(e.outDir, e.prefix+sheet.Name+".json"))
 	if err != nil {
 		return err
 	}
@@ -104,16 +112,20 @@ func (e *jsonExporter) Export(sheet *Sheet) error {
 	return json.NewEncoder(f).Encode(sheet.Map())
 }
 
-func NewYAMLExporter(outDir string) *yamlExporter {
-	return &yamlExporter{outDir: outDir}
+func NewYAMLExporter(outDir, prefix string) *yamlExporter {
+	return &yamlExporter{
+		outDir: outDir,
+		prefix: prefix,
+	}
 }
 
 type yamlExporter struct {
 	outDir string
+	prefix string
 }
 
 func (e *yamlExporter) Export(sheet *Sheet) error {
-	f, err := os.Create(filepath.Join(e.outDir, sheet.Name+".yaml"))
+	f, err := os.Create(filepath.Join(e.outDir, e.prefix+sheet.Name+".yaml"))
 	if err != nil {
 		return err
 	}

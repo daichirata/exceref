@@ -18,6 +18,7 @@ func init() {
 
 	exportCmd.Flags().StringP("out", "o", "", "Set output directory")
 	exportCmd.Flags().StringP("format", "f", "csv", "Set output format")
+	exportCmd.Flags().StringP("prefix", "p", "", "Set output file name prefix")
 
 	exportCmd.MarkFlagRequired("out")
 }
@@ -35,6 +36,10 @@ func exportFunc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	prefix, err := cmd.Flags().GetString("prefix")
+	if err != nil {
+		return err
+	}
 
 	file, err := exceref.Open(args[0])
 	if err != nil {
@@ -42,5 +47,5 @@ func exportFunc(cmd *cobra.Command, args []string) error {
 	}
 	defer file.Close()
 
-	return file.Export(exceref.BuildExporter(format, outDir))
+	return file.Export(exceref.BuildExporter(format, outDir, prefix))
 }
