@@ -159,24 +159,26 @@ func (r *ReferenceResolver) Resolve(sheet *Sheet) error {
 			if reference.Definition.Column != column.Name {
 				continue
 			}
-			if reference.Definition.PolymorphicReference() {
-				for _, row := range sheet.Rows {
-					r, ok := names[row[reference.KeyColumn.Index].Raw]
-					if !ok {
-						return fmt.Errorf("reference_name:%s not found", row[reference.KeyColumn.Index].Raw)
+			if !reference.Definition.PolymorphicReference() {
+				continue
+			}
 
-					}
-					if v, ok := r.ValueMap[row[column.Index].Raw]; ok {
-						row[column.Index] = v
-					} else {
-						return fmt.Errorf("reference:%s value not found from %s:%s", row[column.Index].Raw,
-							reference.Definition.ReferenceSheet, reference.Definition.ReferenceKey)
-					}
-					if column.Type == "" || column.Type == "ref" {
-						column.Type = r.ValueColumn.Type
-					} else if column.Type != r.ValueColumn.Type {
-						return fmt.Errorf("value type mismatch: %s, %s", column.Type, r.ValueColumn.Type)
-					}
+			for i, row := range sheet.Rows {
+				r, ok := names[row[reference.KeyColumn.Index].Raw]
+				if !ok {
+					return fmt.Errorf("sheet:%s row:%d column:%s reference_name:%s not found",
+						sheet.Name, i+1, column.Name, row[reference.KeyColumn.Index].Raw)
+				}
+				if v, ok := r.ValueMap[row[column.Index].Raw]; ok {
+					row[column.Index] = v
+				} else {
+					return fmt.Errorf("sheet:%s row:%d column:%s reference:%s value not found from %s:%s",
+						sheet.Name, i+1, column.Name, row[column.Index].Raw, reference.Definition.ReferenceSheet, reference.Definition.ReferenceKey)
+				}
+				if column.Type == "" || column.Type == "ref" {
+					column.Type = r.ValueColumn.Type
+				} else if column.Type != r.ValueColumn.Type {
+					return fmt.Errorf("sheet:%s row:%d column:%s value type mismatch: %s, %s", sheet.Name, i+1, column.Name, column.Type, r.ValueColumn.Type)
 				}
 			}
 		}
@@ -191,19 +193,22 @@ func (r *ReferenceResolver) Resolve(sheet *Sheet) error {
 			if reference.Definition.Column != column.Name {
 				continue
 			}
-			if !reference.Definition.PolymorphicReference() {
-				column.Type = reference.ValueColumn.Type
-
-				for _, row := range sheet.Rows {
-					if v, ok := reference.ValueMap[row[column.Index].Raw]; ok {
-						row[column.Index] = v
-					} else {
-						return fmt.Errorf("reference:%s value not found from %s:%s", row[column.Index].Raw,
-							reference.Definition.ReferenceSheet, reference.Definition.ReferenceKey)
-					}
-				}
+			if reference.Definition.PolymorphicReference() {
+				continue
 			}
 
+			for i, row := range sheet.Rows {
+				if row[column.Index].Raw == "" {
+					continue
+				}
+				if v, ok := reference.ValueMap[row[column.Index].Raw]; ok {
+					row[column.Index] = v
+				} else {
+					return fmt.Errorf("sheet: %s, row: %d, column: %s, reference: %s, value not found from %s:%s",
+						sheet.Name, i+1, column.Name, row[column.Index].Raw, reference.Definition.ReferenceSheet, reference.Definition.ReferenceKey)
+				}
+			}
+			column.Type = reference.ValueColumn.Type
 		}
 	}
 	return nil
