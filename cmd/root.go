@@ -10,7 +10,8 @@ import (
 var debug bool
 
 var rootCmd = &cobra.Command{
-	Use: "exceref",
+	Use:          "exceref",
+	SilenceUsage: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if debug {
 			slog.SetDefault(slog.New(

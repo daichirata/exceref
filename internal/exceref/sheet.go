@@ -19,9 +19,34 @@ const (
 	ReferenceDefinitionSheetIndexBody       = 1
 )
 
+type ColumnType string
+
+const (
+	ColumnTypeString   ColumnType = "string"
+	ColumnTypeFloat    ColumnType = "float"
+	ColumnTypeInt      ColumnType = "int"
+	ColumnTypeBool     ColumnType = "bool"
+	ColumnTypeDatetime ColumnType = "datetime"
+	ColumnTypeDate     ColumnType = "date"
+	ColumnTypeUnixtime ColumnType = "unixtime"
+	ColumnTypeRef      ColumnType = "ref"
+)
+
+func NewColumnType(s string) (ColumnType, error) {
+	switch ColumnType(s) {
+	case ColumnTypeString, ColumnTypeFloat, ColumnTypeInt, ColumnTypeBool,
+		ColumnTypeDatetime, ColumnTypeDate, ColumnTypeUnixtime, ColumnTypeRef:
+		return ColumnType(s), nil
+	case "":
+		return "", nil
+	default:
+		return "", fmt.Errorf("unknown column type: %s", s)
+	}
+}
+
 type Column struct {
 	Name        string
-	Type        string
+	Type        ColumnType
 	Index       int
 	Description string
 }
@@ -113,8 +138,12 @@ func NewDataSeet(name string, rows [][]string) (*Sheet, error) {
 		switch i {
 		case DataSheetIndexColumnType:
 			for j, value := range r {
+				columnType, err := NewColumnType(value)
+				if err != nil {
+					return nil, err
+				}
 				sheet.Columns = append(sheet.Columns, &Column{
-					Type:  value,
+					Type:  columnType,
 					Index: j,
 				})
 			}
@@ -177,56 +206,55 @@ func NewReferenceDefinitionSheet(name string, rows [][]string) *Sheet {
 	return sheet
 }
 
-func parseValue(columnType, value string) (any, error) {
+func parseValue(columnType ColumnType, value string) (any, error) {
+	if columnType == "" {
+		return "", nil
+	}
 	if value == "" {
 		switch columnType {
-		case "string":
+		case ColumnTypeString:
 			return "", nil
-		case "int":
+		case ColumnTypeInt:
 			return 0, nil
-		case "float":
+		case ColumnTypeFloat:
 			return float64(0), nil
-		case "bool":
+		case ColumnTypeBool:
 			return false, nil
-		case "datetime":
+		case ColumnTypeDatetime:
 			return time.Time{}, nil
-		case "date":
+		case ColumnTypeDate:
 			return time.Time{}.Format(time.DateOnly), nil
-		case "unixtime":
+		case ColumnTypeUnixtime:
 			return int64(0), nil
-		case "ref":
-			return "", nil
-		case "":
+		case ColumnTypeRef:
 			return "", nil
 		}
 		return nil, fmt.Errorf("unmatched type:%s", columnType)
 	}
 	switch columnType {
-	case "string":
+	case ColumnTypeString:
 		return value, nil
-	case "int":
+	case ColumnTypeInt:
 		return strconv.Atoi(value)
-	case "float":
+	case ColumnTypeFloat:
 		return strconv.ParseFloat(value, 64)
-	case "bool":
+	case ColumnTypeBool:
 		return strconv.ParseBool(value)
-	case "datetime":
+	case ColumnTypeDatetime:
 		return time.Parse(time.RFC3339, value)
-	case "date":
+	case ColumnTypeDate:
 		t, err := time.ParseInLocation(time.DateOnly, value, time.UTC)
 		if err != nil {
 			return nil, err
 		}
 		return t.Format(time.DateOnly), nil
-	case "unixtime":
+	case ColumnTypeUnixtime:
 		t, err := time.Parse(time.RFC3339, value)
 		if err != nil {
 			return nil, err
 		}
 		return t.Unix(), nil
-	case "ref":
-		return value, nil
-	case "":
+	case ColumnTypeRef:
 		return value, nil
 	}
 	return nil, fmt.Errorf("unmatched type:%s", columnType)

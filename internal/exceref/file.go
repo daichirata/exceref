@@ -231,3 +231,28 @@ func (f *File) Export(exporter Exporter) error {
 	}
 	return nil
 }
+
+func (f *File) Generate(generator Generator) error {
+	resolver, err := f.ReferenceResolver()
+	if err != nil {
+		return err
+	}
+
+	for _, name := range f.xlsx.GetSheetMap() {
+		if strings.HasPrefix(name, "_") {
+			continue
+		}
+
+		sheet, err := f.DataSheet(name)
+		if err != nil {
+			return err
+		}
+		if err := resolver.Resolve(sheet); err != nil {
+			return err
+		}
+		if err := generator.Generate(sheet); err != nil {
+			return err
+		}
+	}
+	return nil
+}
