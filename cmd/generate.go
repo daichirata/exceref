@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -20,12 +19,10 @@ func init() {
 	generateCmd.Flags().StringP("out", "o", "", "Set output directory")
 	generateCmd.Flags().StringP("lang", "l", "go", "Set output format")
 	generateCmd.Flags().StringP("prefix", "p", "", "Set output model name prefix")
-
-	// language specific
-	generateCmd.Flags().String("package-name", "model", "[Go] Set output package name")
-	generateCmd.Flags().String("tag-name", "json", "[Go] Set output struct tag name")
+	generateCmd.Flags().StringP("template", "t", "", "Set template path")
 
 	generateCmd.MarkFlagRequired("out")
+	generateCmd.MarkFlagRequired("template")
 }
 
 func generateFunc(cmd *cobra.Command, args []string) error {
@@ -45,19 +42,15 @@ func generateFunc(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	packageName, err := cmd.Flags().GetString("package-name")
-	if err != nil {
-		return err
-	}
-	tagName, err := cmd.Flags().GetString("tag-name")
+	templatePath, err := cmd.Flags().GetString("template")
 	if err != nil {
 		return err
 	}
 
 	option := exceref.GenerateOption{
-		GoPackageName: packageName,
-		GoTagNames:    strings.Split(tagName, ","),
+		Prefix:       prefix,
+		OutDir:       outDir,
+		TemplatePath: templatePath,
 	}
 
 	file, err := exceref.Open(args[0])
@@ -66,5 +59,5 @@ func generateFunc(cmd *cobra.Command, args []string) error {
 	}
 	defer file.Close()
 
-	return file.Generate(exceref.BuildGenerator(lang, outDir, prefix, option))
+	return file.Generate(exceref.BuildGenerator(lang, option))
 }

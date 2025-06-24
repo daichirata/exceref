@@ -32,6 +32,10 @@ const (
 	ColumnTypeRef      ColumnType = "ref"
 )
 
+func (c ColumnType) String() string {
+	return string(c)
+}
+
 func NewColumnType(s string) (ColumnType, error) {
 	switch ColumnType(s) {
 	case ColumnTypeString, ColumnTypeFloat, ColumnTypeInt, ColumnTypeBool,
