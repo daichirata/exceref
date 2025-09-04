@@ -3,6 +3,7 @@ package exceref
 import (
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	"github.com/xuri/excelize/v2"
@@ -32,6 +33,11 @@ type File struct {
 	resolver *ReferenceResolver
 }
 
+func (f *File) Name() string {
+	base := filepath.Base(f.path)
+	return strings.TrimSuffix(base, filepath.Ext(base))
+}
+
 func (f *File) Save() error {
 	return f.xlsx.Save()
 }
@@ -56,15 +62,23 @@ func (f *File) DataSheet(name string) (*Sheet, error) {
 	return f.data[name], nil
 }
 
-func (f *File) ReferenceResolver() (*ReferenceResolver, error) {
-	if f.resolver != nil {
-		return f.resolver, nil
-	}
+func (f *File) ReferenceDefinitionSheet() (*Sheet, error) {
 	rows, err := f.xlsx.GetRows(ReferenceDefinitionSheetName)
 	if err != nil {
 		return nil, err
 	}
-	resolver, err := NewReferenceResolver(f, NewReferenceDefinitionSheet(ReferenceDefinitionSheetName, rows))
+	return NewReferenceDefinitionSheet(ReferenceDefinitionSheetName, rows), nil
+}
+
+func (f *File) ReferenceResolver() (*ReferenceResolver, error) {
+	if f.resolver != nil {
+		return f.resolver, nil
+	}
+	sheet, err := f.ReferenceDefinitionSheet()
+	if err != nil {
+		return nil, err
+	}
+	resolver, err := NewReferenceResolver(f, sheet)
 	if err != nil {
 		return nil, err
 	}
@@ -230,6 +244,10 @@ func (f *File) Export(exporter Exporter) error {
 		}
 	}
 	return nil
+}
+
+func (f *File) ExportMetadata(outDir string) error {
+	return NewMetadataExporter(outDir).Export(f)
 }
 
 func (f *File) Generate(generator Generator) error {
