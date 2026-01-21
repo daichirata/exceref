@@ -47,7 +47,7 @@ func (e *csvExporter) Export(sheet *Sheet) error {
 
 	columns := make([]*Column, 0, len(sheet.Columns))
 	for _, c := range sheet.Columns {
-		if c.Name == "" {
+		if !c.IsExportable() {
 			continue
 		}
 		columns = append(columns, c)

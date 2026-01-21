@@ -54,7 +54,7 @@ func (g *generator) Generate(sheet *Sheet) error {
 
 	columns := make([]*Column, 0, len(sheet.Columns))
 	for _, c := range sheet.Columns {
-		if c.Name == "" {
+		if !c.IsExportable() {
 			continue
 		}
 		columns = append(columns, c)
@@ -110,7 +110,7 @@ func (g *goGenerator) Generate(sheet *Sheet) error {
 
 	columns := make([]*Column, 0, len(sheet.Columns))
 	for _, c := range sheet.Columns {
-		if c.Name == "" {
+		if !c.IsExportable() {
 			continue
 		}
 		columns = append(columns, c)
@@ -211,7 +211,7 @@ func (g *csharpGenerator) Generate(sheet *Sheet) error {
 
 	columns := make([]*Column, 0, len(sheet.Columns))
 	for _, c := range sheet.Columns {
-		if c.Name == "" {
+		if !c.IsExportable() {
 			continue
 		}
 		columns = append(columns, c)
