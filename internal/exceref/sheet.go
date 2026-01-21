@@ -55,6 +55,10 @@ type Column struct {
 	Description string
 }
 
+func (c *Column) IsExportable() bool {
+	return c.Name != "" && c.Type != ""
+}
+
 type Row []*Cell
 
 func (r Row) Cells(names ...string) []*Cell {
@@ -97,7 +101,7 @@ func (s *Sheet) Map() []map[string]any {
 		data[i] = make(map[string]any)
 
 		for _, column := range s.Columns {
-			if column.Name == "" {
+			if !column.IsExportable() {
 				continue
 			}
 			data[i][column.Name] = row[column.Index].Value
