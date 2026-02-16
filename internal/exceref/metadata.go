@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/daichirata/exceref/internal/errs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -56,7 +57,7 @@ func (e *metadataExporter) Export(file *File) error {
 
 	resolver, err := file.ReferenceResolver()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load reference resolver")
 	}
 	for _, definition := range resolver.ReferenceDefinitions {
 		referencesYaml.References = append(referencesYaml.References, MetadataReference{
@@ -84,7 +85,7 @@ func (e *metadataExporter) Export(file *File) error {
 
 		sheet, err := file.DataSheet(name)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "load metadata target sheet")
 		}
 		for _, col := range sheet.Columns {
 			schema := MetadataColumnSchema{
@@ -111,11 +112,11 @@ func (e *metadataExporter) Export(file *File) error {
 	}
 
 	if err := e.write(file.Name()+ReferenceDefinitionSheetName+".yaml", referencesYaml); err != nil {
-		return err
+		return errs.Wrap(err, "write metadata reference yaml")
 	}
 	for _, dataYaml := range dataYamls {
 		if err := e.write(dataYaml.Sheet+".yaml", dataYaml); err != nil {
-			return err
+			return errs.Wrap(err, "write metadata data yaml")
 		}
 	}
 	return nil
@@ -124,9 +125,9 @@ func (e *metadataExporter) Export(file *File) error {
 func (e *metadataExporter) write(name string, v any) error {
 	f, err := os.Create(filepath.Join(e.outDir, name))
 	if err != nil {
-		return err
+		return errs.Wrap(err, "create metadata file")
 	}
 	defer f.Close()
 
-	return yaml.NewEncoder(f).Encode(v)
+	return errs.Wrap(yaml.NewEncoder(f).Encode(v), "encode metadata yaml")
 }

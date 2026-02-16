@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/daichirata/exceref/internal/errs"
 	"github.com/daichirata/exceref/internal/exceref"
 )
 
@@ -24,15 +25,15 @@ func updateFunc(cmd *cobra.Command, args []string) error {
 
 	file, err := exceref.Open(args[0])
 	if err != nil {
-		return err
+		return errs.Wrap(err, "open file")
 	}
 	defer file.Close()
 
 	if err := file.UpdateReferenceData(); err != nil {
-		return err
+		return errs.Wrap(err, "update reference data")
 	}
 	if err := file.UpdateDataValidations(); err != nil {
-		return err
+		return errs.Wrap(err, "update data validations")
 	}
-	return file.Save()
+	return errs.Wrap(file.Save(), "save file")
 }

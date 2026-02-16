@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/daichirata/exceref/internal/errs"
 	"github.com/daichirata/exceref/internal/exceref"
 )
 
@@ -32,19 +33,19 @@ func generateFunc(cmd *cobra.Command, args []string) error {
 
 	outDir, err := cmd.Flags().GetString("out")
 	if err != nil {
-		return err
+		return errs.Wrap(err, "get out flag")
 	}
 	lang, err := cmd.Flags().GetString("lang")
 	if err != nil {
-		return err
+		return errs.Wrap(err, "get lang flag")
 	}
 	prefix, err := cmd.Flags().GetString("prefix")
 	if err != nil {
-		return err
+		return errs.Wrap(err, "get prefix flag")
 	}
 	templatePath, err := cmd.Flags().GetString("template")
 	if err != nil {
-		return err
+		return errs.Wrap(err, "get template flag")
 	}
 
 	option := exceref.GenerateOption{
@@ -55,9 +56,9 @@ func generateFunc(cmd *cobra.Command, args []string) error {
 
 	file, err := exceref.Open(args[0])
 	if err != nil {
-		return err
+		return errs.Wrap(err, "open file")
 	}
 	defer file.Close()
 
-	return file.Generate(exceref.BuildGenerator(lang, option))
+	return errs.Wrap(file.Generate(exceref.BuildGenerator(lang, option)), "generate models")
 }
