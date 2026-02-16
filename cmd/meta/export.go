@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/daichirata/exceref/internal/errs"
 	"github.com/daichirata/exceref/internal/exceref"
 )
 
@@ -28,14 +29,14 @@ func exportFunc(cmd *cobra.Command, args []string) error {
 
 	outDir, err := cmd.Flags().GetString("out")
 	if err != nil {
-		return err
+		return errs.Wrap(err, "get out flag")
 	}
 
 	file, err := exceref.Open(args[0])
 	if err != nil {
-		return err
+		return errs.Wrap(err, "open file")
 	}
 	defer file.Close()
 
-	return file.ExportMetadata(outDir)
+	return errs.Wrap(file.ExportMetadata(outDir), "export metadata")
 }

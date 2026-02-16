@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/daichirata/exceref/internal/errs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,7 +42,7 @@ type csvExporter struct {
 func (e *csvExporter) Export(sheet *Sheet) error {
 	f, err := os.Create(filepath.Join(e.outDir, e.prefix+sheet.Name+".csv"))
 	if err != nil {
-		return err
+		return errs.Wrap(err, "create csv file")
 	}
 	defer f.Close()
 
@@ -60,19 +61,19 @@ func (e *csvExporter) Export(sheet *Sheet) error {
 		headers[i] = column.Name
 	}
 	if err := writer.Write(headers); err != nil {
-		return err
+		return errs.Wrap(err, "write csv header")
 	}
 	for _, row := range sheet.Rows {
 		records := make([]string, len(columns))
 		for i, column := range columns {
 			value, err := e.toCSVString(row[column.Index].Value)
 			if err != nil {
-				return err
+				return errs.Wrap(err, "format csv value")
 			}
 			records[i] = value
 		}
 		if err := writer.Write(records); err != nil {
-			return err
+			return errs.Wrap(err, "write csv row")
 		}
 	}
 	writer.Flush()
@@ -105,11 +106,11 @@ type jsonExporter struct {
 func (e *jsonExporter) Export(sheet *Sheet) error {
 	f, err := os.Create(filepath.Join(e.outDir, e.prefix+sheet.Name+".json"))
 	if err != nil {
-		return err
+		return errs.Wrap(err, "create json file")
 	}
 	defer f.Close()
 
-	return json.NewEncoder(f).Encode(sheet.Map())
+	return errs.Wrap(json.NewEncoder(f).Encode(sheet.Map()), "encode json")
 }
 
 func NewYAMLExporter(outDir, prefix string) *yamlExporter {
@@ -127,9 +128,9 @@ type yamlExporter struct {
 func (e *yamlExporter) Export(sheet *Sheet) error {
 	f, err := os.Create(filepath.Join(e.outDir, e.prefix+sheet.Name+".yaml"))
 	if err != nil {
-		return err
+		return errs.Wrap(err, "create yaml file")
 	}
 	defer f.Close()
 
-	return yaml.NewEncoder(f).Encode(sheet.Map())
+	return errs.Wrap(yaml.NewEncoder(f).Encode(sheet.Map()), "encode yaml")
 }

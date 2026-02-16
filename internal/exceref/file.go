@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/daichirata/exceref/internal/errs"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -17,7 +18,7 @@ const (
 func Open(path string) (*File, error) {
 	file, err := excelize.OpenFile(path)
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "excelize open file")
 	}
 	return &File{
 		path: path,
@@ -52,11 +53,11 @@ func (f *File) DataSheet(name string) (*Sheet, error) {
 	}
 	rows, err := f.xlsx.GetRows(name)
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "get data sheet rows")
 	}
 	sheet, err := NewDataSeet(name, rows)
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "parse data sheet")
 	}
 	f.data[name] = sheet
 	return f.data[name], nil
@@ -65,7 +66,7 @@ func (f *File) DataSheet(name string) (*Sheet, error) {
 func (f *File) ReferenceDefinitionSheet() (*Sheet, error) {
 	rows, err := f.xlsx.GetRows(ReferenceDefinitionSheetName)
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "get reference definition rows")
 	}
 	return NewReferenceDefinitionSheet(ReferenceDefinitionSheetName, rows), nil
 }
@@ -76,11 +77,11 @@ func (f *File) ReferenceResolver() (*ReferenceResolver, error) {
 	}
 	sheet, err := f.ReferenceDefinitionSheet()
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "load reference definition sheet")
 	}
 	resolver, err := NewReferenceResolver(f, sheet)
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "build reference resolver")
 	}
 	f.resolver = resolver
 	return f.resolver, nil
@@ -108,11 +109,11 @@ func (f *File) UpdateReferenceData() error {
 
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load reference resolver")
 	}
 	references, err := resolver.References()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load references")
 	}
 	for _, reference := range references {
 		if reference.Definition.PolymorphicReference() {
@@ -125,25 +126,30 @@ func (f *File) UpdateReferenceData() error {
 		}
 		cell, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, 1)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "build reference data cell")
 		}
 		f.xlsx.SetSheetCol(ReferenceDataSheetName, cell, &keys)
 
 		if reference.Definition.ReferenceName != "" {
 			first, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, 1, true)
 			if err != nil {
-				return err
+				return errs.Wrap(err, "build defined name first cell")
 			}
-			last, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, len(keys), true)
+			lastRow := len(keys)
+			if lastRow == 0 {
+				// Keep a valid single-cell range even when the reference source has no rows.
+				lastRow = 1
+			}
+			last, err := excelize.CoordinatesToCellName(reference.Definition.Index+1, lastRow, true)
 			if err != nil {
-				return err
+				return errs.Wrap(err, "build defined name last cell")
 			}
 			err = f.xlsx.SetDefinedName(&excelize.DefinedName{
 				Name:     reference.Definition.ReferenceName,
 				RefersTo: fmt.Sprintf("%s!%s:%s", ReferenceDataSheetName, first, last),
 			})
 			if err != nil {
-				return err
+				return errs.Wrap(err, "set defined name")
 			}
 		}
 	}
@@ -155,7 +161,7 @@ func (f *File) DeleteDataValidations() error {
 
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load reference resolver")
 	}
 	for _, referenceDefinition := range resolver.ReferenceDefinitions {
 		if referenceDefinition.Sheet == "" {
@@ -163,11 +169,11 @@ func (f *File) DeleteDataValidations() error {
 		}
 		sheet, err := f.DataSheet(referenceDefinition.Sheet)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "load data sheet for validation deletion")
 		}
 		sqref, _, err := sheet.Sqrefs(referenceDefinition)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "build sqref for validation deletion")
 		}
 		m[referenceDefinition.Sheet] = append(m[referenceDefinition.Sheet], sqref)
 	}
@@ -180,16 +186,16 @@ func (f *File) DeleteDataValidations() error {
 
 func (f *File) UpdateDataValidations() error {
 	if err := f.DeleteDataValidations(); err != nil {
-		return err
+		return errs.Wrap(err, "delete data validations")
 	}
 
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load reference resolver")
 	}
 	references, err := resolver.References()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load references")
 	}
 	for _, reference := range references {
 		if reference.Definition.Sheet == "" {
@@ -197,18 +203,18 @@ func (f *File) UpdateDataValidations() error {
 		}
 		sheet, err := f.DataSheet(reference.Definition.Sheet)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "load data sheet for validation update")
 		}
 		sqref, srcSqref, err := sheet.Sqrefs(reference.Definition)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "build sqref for validation update")
 		}
 		dvRange := excelize.NewDataValidation(true)
 		dvRange.Sqref = sqref
 		if reference.Definition.PolymorphicReference() {
 			name, err := excelize.ColumnNumberToName(reference.KeyColumn.Index + 1)
 			if err != nil {
-				return err
+				return errs.Wrap(err, "build indirect column name")
 			}
 			dvRange.SetSqrefDropList(fmt.Sprintf("INDIRECT($%s4)", name))
 		} else {
@@ -224,7 +230,7 @@ func (f *File) UpdateDataValidations() error {
 func (f *File) Export(exporter Exporter) error {
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load reference resolver")
 	}
 
 	for _, name := range f.xlsx.GetSheetMap() {
@@ -234,13 +240,13 @@ func (f *File) Export(exporter Exporter) error {
 
 		sheet, err := f.DataSheet(name)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "load export target sheet")
 		}
 		if err := resolver.Resolve(sheet); err != nil {
-			return err
+			return errs.Wrap(err, "resolve references")
 		}
 		if err := exporter.Export(sheet); err != nil {
-			return err
+			return errs.Wrap(err, "export sheet")
 		}
 	}
 	return nil
@@ -253,7 +259,7 @@ func (f *File) ExportMetadata(outDir string) error {
 func (f *File) Generate(generator Generator) error {
 	resolver, err := f.ReferenceResolver()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load reference resolver")
 	}
 
 	for _, name := range f.xlsx.GetSheetMap() {
@@ -263,13 +269,13 @@ func (f *File) Generate(generator Generator) error {
 
 		sheet, err := f.DataSheet(name)
 		if err != nil {
-			return err
+			return errs.Wrap(err, "load generate target sheet")
 		}
 		if err := resolver.Resolve(sheet); err != nil {
-			return err
+			return errs.Wrap(err, "resolve references")
 		}
 		if err := generator.Generate(sheet); err != nil {
-			return err
+			return errs.Wrap(err, "generate code")
 		}
 	}
 	return nil

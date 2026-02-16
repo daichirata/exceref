@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"text/template"
 
+	"github.com/daichirata/exceref/internal/errs"
 	"github.com/gobuffalo/flect"
 	"github.com/iancoleman/strcase"
 	"github.com/jinzhu/inflection"
@@ -81,16 +82,16 @@ func (g *generator) Generate(sheet *Sheet) error {
 
 	templateBody, err := os.ReadFile(g.option.TemplatePath)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "read template file")
 	}
 	tpl := template.Must(template.New("").Funcs(funcMap).Parse(string(templateBody)))
 
 	buf := new(bytes.Buffer)
 	if err := tpl.Execute(buf, data); err != nil {
-		return err
+		return errs.Wrap(err, "execute template")
 	}
 	if err := os.WriteFile(filepath.Join(g.option.OutDir, strcase.ToCamel(inflection.Singular(name))+".gen"), buf.Bytes(), 0644); err != nil {
-		return err
+		return errs.Wrap(err, "write generated file")
 	}
 	return nil
 }
@@ -140,20 +141,20 @@ func (g *goGenerator) Generate(sheet *Sheet) error {
 
 	templateBody, err := os.ReadFile(g.option.TemplatePath)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "read template file")
 	}
 	tpl := template.Must(template.New("").Funcs(funcMap).Parse(string(templateBody)))
 
 	buf := new(bytes.Buffer)
 	if err := tpl.Execute(buf, data); err != nil {
-		return err
+		return errs.Wrap(err, "execute template")
 	}
 	src, err := format.Source(buf.Bytes())
 	if err != nil {
-		return err
+		return errs.Wrap(err, "format generated source")
 	}
 	if err := os.WriteFile(filepath.Join(g.option.OutDir, name+".gen.go"), src, 0644); err != nil {
-		return err
+		return errs.Wrap(err, "write generated go file")
 	}
 	return nil
 }
@@ -238,16 +239,16 @@ func (g *csharpGenerator) Generate(sheet *Sheet) error {
 
 	templateBody, err := os.ReadFile(g.option.TemplatePath)
 	if err != nil {
-		return err
+		return errs.Wrap(err, "read template file")
 	}
 	tpl := template.Must(template.New("").Funcs(funcMap).Parse(string(templateBody)))
 
 	buf := new(bytes.Buffer)
 	if err := tpl.Execute(buf, data); err != nil {
-		return err
+		return errs.Wrap(err, "execute template")
 	}
 	if err := os.WriteFile(filepath.Join(g.option.OutDir, strcase.ToCamel(inflection.Singular(name))+".cs"), buf.Bytes(), 0644); err != nil {
-		return err
+		return errs.Wrap(err, "write generated csharp file")
 	}
 	return nil
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/daichirata/exceref/internal/errs"
 )
 
 type ReferenceDefinition struct {
@@ -96,13 +98,13 @@ func (r *ReferenceResolver) References() ([]*Reference, error) {
 	for i, referenceDefinition := range r.ReferenceDefinitions {
 		referenceSheet, err := r.SheetReader.Open(referenceDefinition.ReferenceFilePath(), referenceDefinition.ReferenceSheet)
 		if err != nil {
-			return nil, err
+			return nil, errs.Wrap(err, "open reference sheet")
 		}
 
 		if referenceDefinition.PolymorphicReference() {
 			k, err := referenceSheet.Column(referenceDefinition.ReferenceKey)
 			if err != nil {
-				return nil, err
+				return nil, errs.Wrap(err, "find polymorphic reference key column")
 			}
 			reference := &Reference{
 				Definition: referenceDefinition,
@@ -112,11 +114,11 @@ func (r *ReferenceResolver) References() ([]*Reference, error) {
 		} else {
 			k, err := referenceSheet.Column(referenceDefinition.ReferenceKey)
 			if err != nil {
-				return nil, err
+				return nil, errs.Wrap(err, "find reference key column")
 			}
 			v, err := referenceSheet.Column(referenceDefinition.ReferenceValue)
 			if err != nil {
-				return nil, err
+				return nil, errs.Wrap(err, "find reference value column")
 			}
 			reference := &Reference{
 				Definition:  referenceDefinition,
@@ -140,7 +142,7 @@ func (r *ReferenceResolver) References() ([]*Reference, error) {
 func (r *ReferenceResolver) Resolve(sheet *Sheet) error {
 	references, err := r.References()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "load references for resolve")
 	}
 
 	// Resolve the poymorphic reference first, since poymorphic reference resolution cannot be performed
@@ -232,7 +234,7 @@ func (r *XLSXReader) Open(path string, sheet string) (*Sheet, error) {
 	}
 	file, err := Open(path)
 	if err != nil {
-		return nil, err
+		return nil, errs.Wrap(err, "open reference file")
 	}
 	r.file[path] = file
 	return file.DataSheet(sheet)
